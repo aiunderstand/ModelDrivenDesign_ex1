@@ -4,13 +4,14 @@ This is the single most important document in the repository. Two consumers must
 exactly, or every report the tool produces is noise:
 
 1. [`AGENTS.md`](../../../AGENTS.md), which tells the AI how to turn the design into C++
-2. the extractors, [`class_diagram/cpp_extract.py`](../class_diagram/cpp_extract.py) and
-   [`state_diagram/cpp_extract.py`](../state_diagram/cpp_extract.py) — how libclang turns that
-   C++ back into the implemented design
+2. the extractors, [`class_diagram/cpp_extract.py`](../class_diagram/cpp_extract.py),
+   [`state_diagram/cpp_extract.py`](../state_diagram/cpp_extract.py) and
+   [`sequence_diagram/trace_extract.py`](../sequence_diagram/trace_extract.py) — how the
+   verifier turns that C++ (or a run of it) back into the implemented design
 
 If you change a rule here, change it in both, and re-run `tools/verify.py --all` to check the
-examples still give the results their READMEs describe. Class diagrams come first; state
-machines are at the [end](#state-machines).
+examples still give the results their READMEs describe. Class diagrams come first, then
+[state machines](#state-machines) and [sequence diagrams](#sequence-diagrams).
 
 ## Scope rules
 
@@ -219,3 +220,40 @@ declared but unused enumerator is a warning); the initial state from the initial
 **Names** compare as everywhere on this page: `In transit` ≡ `InTransit` ≡ `in_transit`, and a
 trailing underscore is ignored, so the guard `[signed]` may be `signed_()` because `signed` is a
 C++ keyword.
+
+## Sequence diagrams
+
+A sequence diagram, `diagrams/input/sequence-<scenario>.drawio`, is one scenario: what the
+objects say to each other when the actor does one thing. It is implemented as a small program
+that *does* that thing, and verified by running it: the calls between the project's classes,
+in order, are the messages. Nothing is read from the code; it is recorded from a run.
+
+| UML | C++ |
+|---|---|
+| the scenario | `impl/scenarios/<scenario>.cpp`, built by `add_executable(scenario_<scenario> scenarios/<scenario>.cpp)` and linked to the library |
+| the set-up the diagram does not show | `main()`: it creates the objects, then calls `scenario()` |
+| the actor's messages | the calls `scenario()` makes: `void scenario(Library& library) { library.lend("b1", "m1"); }` |
+| a lifeline `order: Order` | an object of class `Order` — one per class |
+| a message `Library → Catalog : find(id)` | `Catalog::find` entered while `Library::lend` runs: a call of one class's method from another's |
+| a self-message `Library → Library : findMember(id)` | a call of the class's own method — drawn when it matters, otherwise not counted |
+| a return message (dashed) | the return of the call; documentation, not compared |
+
+The rules the recording follows:
+
+- **A message is a method call between the project's classes.** Its receiver is the object's
+  actual class, whatever pointer or reference type it was called through. Its caller is the
+  class whose method made the call — code in a lambda belongs to the method it is written in.
+  Calls from `scenario()` itself, or from any function that is not a class method, come from
+  the actor.
+- **Constructors, destructors, operators and free functions are never messages**, nor are calls
+  into the standard library. A creation message in a drawing (`«create»`) is a warning.
+- **Every call between classes counts**, getters included. A call a class makes to itself is
+  counted only if the design draws it.
+- **Order is compared, arguments are not.** `lend("b1", "m1")` and `lend(bookId, memberId)`
+  are the same message; only the method name matters.
+- **The scenario must be deterministic**: single-threaded, no clock, no randomness, no input.
+  The same program must make the same calls every time.
+- **Objects are told apart by class.** Two lifelines of one class in a diagram are a warning.
+
+Fragments (`alt`, `loop`, `opt`) are not supported: one run takes one path, so draw one
+scenario per path.

@@ -1,4 +1,5 @@
 build/
+build-trace/
 __pycache__/
 *.pyc
 compile_commands.json

@@ -177,6 +177,7 @@ def legend(prefix, title, subtitle, rows, x, y=40, w=300):
     rows: [(status or None, text)]; None draws an uncoloured swatch.
     """
     row_h, head_h = 26, 46
+    w = max(w, int(len(subtitle) * 5.6) + 24)   # the subtitle is 10px text: keep it on one line
     lid = f"{prefix}legend"
     head = (f"<b>{html.escape(title)}</b><br>"
             f"<font style=\"font-size:10px\">{html.escape(subtitle)}</font>")

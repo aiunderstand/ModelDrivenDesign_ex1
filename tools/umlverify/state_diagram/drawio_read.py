@@ -3,7 +3,7 @@
 Recognises the shapes of draw.io's UML palette:
 
     state        a rounded rectangle (`rounded=1`, or `shape=umlState`) labelled with the name
-    initial      the start symbol (`shape=startState`, or a black-filled ellipse without a label)
+    initial      the start symbol (`shape=startState`, or a filled ellipse without a label)
     final        the end symbol (`shape=endState`); an unlabelled edge into it documents a
                  terminal state and is kept as a drawing, not counted
     transition   an edge from one state to another, labelled `event [guard] / action`
@@ -27,7 +27,7 @@ def _kind(style, text):
     if "shape=endState" in st:
         return "final"
     if "ellipse" in st:
-        black = (style_value(st, "fillColor") or "").lower() in ("#000000", "black")
+        black = (style_value(st, "fillColor") or "").lower() in ("#000000", "black", "strokecolor")
         return "initial" if black and not text else "other"
     if "swimlane" in st:
         return "composite"

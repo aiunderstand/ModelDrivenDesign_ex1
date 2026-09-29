@@ -35,6 +35,7 @@ class Context:
         self.report = self.folder / "reports" / f"{diagram_type}-report.md"
         self.impl = self.folder / "impl"
         self.build = self.folder / "build"
+        self.trace_build = self.folder / "build-trace"
 
     def output(self, name):
         """diagrams/output/<type>-<name>"""
@@ -91,3 +92,53 @@ def build_cmake(ctx):
             _BUILDS[ctx.build] = failure
             raise failure
     _BUILDS[ctx.build] = None
+
+
+RUNTIME = Path(__file__).resolve().parent.parent / "runtime"
+_TRACED = {}   # build-trace dir -> None (built) or the FlowFailed it raised
+
+
+def cxx_compiler(build_dir):
+    """The compiler the project's own build used (from its CMakeCache), else `c++`."""
+    try:
+        for line in (Path(build_dir) / "CMakeCache.txt").read_text().splitlines():
+            if line.startswith("CMAKE_CXX_COMPILER:"):
+                return line.split("=", 1)[1].strip() or "c++"
+    except OSError:
+        pass
+    return "c++"
+
+
+def build_traced(ctx):
+    """Build impl/ a second time, in build-trace/, with function tracing.
+
+    The project's own CMakeLists.txt is used unchanged: runtime/instrument.cmake is included
+    after its project() call and adds the entry/exit hooks to every source and the trace
+    runtime to every executable (see runtime/uml_trace.cpp). Built once per run, from
+    scratch: a recording must come from the sources as they are now, and an incremental
+    build can miss an edit made in the same second as the previous build.
+    """
+    if ctx.trace_build in _TRACED:
+        if _TRACED[ctx.trace_build] is not None:
+            raise _TRACED[ctx.trace_build]
+        return
+    ctx.trace_build.mkdir(parents=True, exist_ok=True)
+    runtime = ctx.trace_build / "uml_trace.o"
+    steps = (
+        [cxx_compiler(ctx.build), "-std=c++20", "-c", str(RUNTIME / "uml_trace.cpp"), "-o", str(runtime)],
+        ["cmake", "-S", str(ctx.impl), "-B", str(ctx.trace_build),
+         f"-DCMAKE_PROJECT_INCLUDE={RUNTIME / 'instrument.cmake'}",
+         f"-DUML_TRACE_RUNTIME={runtime}"],
+        ["cmake", "--build", str(ctx.trace_build), "--clean-first"],
+    )
+    for cmd in steps:
+        try:
+            run = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise FlowFailed(f"{cmd[0]} is not installed, so the implementation cannot be traced")
+        if run.returncode != 0:
+            print(run.stdout + run.stderr, flush=True)
+            failure = FlowFailed("the traced build of the implementation failed", run.stdout + run.stderr)
+            _TRACED[ctx.trace_build] = failure
+            raise failure
+    _TRACED[ctx.trace_build] = None

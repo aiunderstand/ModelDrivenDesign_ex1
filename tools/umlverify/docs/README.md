@@ -17,7 +17,8 @@ impl/ ──build──▶ extract ──────────▶ implemented
    mermaid (`diagrams/output/<type>-design.mmd`).
 2. **Build and extract the implementation.** The code must build; the implemented design is then
    read from it mechanically, by libclang: for class diagrams from the C++ headers, for state
-   machines from the class's transition table.
+   machines from the class's transition table. A sequence diagram is recorded instead of read:
+   the scenario runs in a traced build and its calls are the messages.
 3. **Compare.** Both models become *elements* — for a class diagram, one class, attribute, method
    or relation each — and every element of either diagram lands in exactly one bucket:
 
@@ -36,9 +37,10 @@ impl/ ──build──▶ extract ──────────▶ implemented
    they cannot disagree.
 
 The **input file's name picks the diagram type**: `class.drawio` runs the class-diagram flow,
-`state-<class>.drawio` (say `state-order.drawio`) the state-machine flow for that class. All
-outputs carry the file's name as a prefix, so several designs share one folder and one
-implementation, which is built once per run.
+`state-<class>.drawio` (say `state-order.drawio`) the state-machine flow for that class, and
+`sequence-<scenario>.drawio` the sequence-diagram flow for that scenario. All outputs carry the
+file's name as a prefix, so several designs share one folder and one implementation, which is
+built once per run.
 
 ## Package layout
 
@@ -51,8 +53,10 @@ umlverify/
     compare.py           Element, the four buckets, alignment
     report.py            the markdown report
     routing.py           orthogonal routing around boxes, for lines nobody drew
-    project.py           Context (a project's paths), FlowFailed/NotReady, the CMake build gate
+    project.py           Context (a project's paths), FlowFailed/NotReady, the CMake build gate,
+                         the traced build
     cpp.py               parsing a project's headers with libclang
+    trace.py             function traces: recording a run, resolving addresses to names
   class_diagram/       the class-diagram flow: class.drawio + C++
     __init__.py          run(): read → build → extract → compare → report
     drawio_read.py       class.drawio -> model
@@ -67,10 +71,21 @@ umlverify/
     mermaid.py           the mermaid stateDiagram-v2 subset, read and written
     cpp_extract.py       the class's transition table -> machine, via libclang
     elements.py          machine -> elements
+  sequence_diagram/    the sequence-diagram flow: sequence-<scenario>.drawio + a scenario program
+    __init__.py          run(): read → build (twice) → record → align → report
+    drawio_read.py       sequence-<scenario>.drawio -> scenario
+    drawio_write.py      scenario -> draw.io shapes; the colour-coded comparison
+    mermaid.py           the mermaid sequenceDiagram subset, read and written
+    trace_extract.py     a run of the scenario -> the messages it made
+    elements.py          scenario -> elements; the alignment of two message sequences
+  runtime/             what the traced build adds to a project
+    instrument.cmake     compile every source with entry/exit hooks, link the runtime
+    uml_trace.cpp        the runtime: one line per entry and exit into UML_TRACE_FILE
   docs/
     README.md            this file
     CLASS-DIAGRAMS.md    how the class-diagram flow reads, extracts and compares
     STATE-DIAGRAMS.md    the same for state machines
+    SEQUENCE-DIAGRAMS.md the same for sequence diagrams
     UML-CPP-MAPPING.md   the rules that turn UML into C++ and back
 ```
 
@@ -120,12 +135,15 @@ shape.
 | The report never fails a build | It is for self-assessment and instructor visibility, not a grade gate. |
 | No layout engine | The comparison reuses the positions from the person's own draw.io file; the AI's additional classes go in a column on the right. |
 | A state machine is read from a table, never from `handle()`'s body | A method body can be written a hundred ways; a table has one shape, so libclang reads it back exactly. The table is the design, `handle()` only runs it. |
+| A sequence diagram is recorded from a run, never inferred from the code | The calls a scenario makes are exactly what the diagram shows, and a deterministic run shows them exactly. Compiler instrumentation records them, so the implementation needs no trace calls and cannot forget or fake one. |
 | Unreadable parts of a design are warnings, never silent drops | A silently dropped element would look exactly like an implementation mistake. |
 
 ## Requirements and platform notes
 
 Python 3, CMake, a C++20 compiler, and the libclang Python bindings (`requirements.txt`; the
-VS Code task *Set up Python environment* installs them into `.venv/`).
+VS Code task *Set up Python environment* installs them into `.venv/`). Sequence diagrams also
+need `nm` (part of every toolchain) and a compiler that supports `-finstrument-functions`
+(clang and GCC do).
 
 libclang must match the standard library headers it parses. On macOS the `libclang` wheel's
 bundled LLVM fails on Apple's libc++ (`'_Tp' does not refer to a value`), so `cpp_extract.py` uses
@@ -134,9 +152,9 @@ system libclang matches. Windows is untested.
 
 ## The examples are the test suite
 
-`examples/1-class-simple` and `examples/3-state-simple` must score 100 %, and
-`examples/2-class-library` and `examples/4-state-order` must give exactly the differences their
-READMEs describe. After changing the library, run `tools/verify.py --all` and check
+`examples/1-class-simple`, `examples/3-state-simple` and `examples/5-sequence-simple` must
+score 100 %, and `examples/2-class-library`, `examples/4-state-order` and
+`examples/6-sequence-library` must give exactly the differences their READMEs describe. After changing the library, run `tools/verify.py --all` and check
 `git diff examples/`: generated files should only change when you meant them to.
 
 Also look at what the library draws. `node tools/render-drawio/render.js <file.drawio>` renders

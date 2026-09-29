@@ -27,12 +27,39 @@ def headers(include_dir):
     return sorted(p for p in include.rglob("*") if p.suffix in HEADER_SUFFIXES)
 
 
+_UNITS = {}   # resolved include dir -> (tu, ours): one parse per run, however many flows ask
+
+
 def translation_unit(include_dir):
     """Parse all headers under include_dir as one unit -> (tu, ours).
 
     Raises RuntimeError with the first compiler error, or when there are no headers.
     """
     include = Path(include_dir)
+    key = str(include.resolve())
+    if key not in _UNITS:
+        _UNITS[key] = _parse(include)
+    return _UNITS[key]
+
+
+def project_classes(include_dir):
+    """The names of the classes, structs and class templates the headers define, in order."""
+    tu, ours = translation_unit(include_dir)
+    names = []
+
+    def walk(cur):
+        for c in cur.get_children():
+            if c.kind == ci.CursorKind.NAMESPACE:
+                walk(c)
+            elif (c.kind in (ci.CursorKind.CLASS_DECL, ci.CursorKind.STRUCT_DECL,
+                             ci.CursorKind.CLASS_TEMPLATE)
+                  and ours(c) and c.is_definition() and c.spelling and c.spelling not in names):
+                names.append(c.spelling)
+    walk(tu.cursor)
+    return names
+
+
+def _parse(include):
     found = headers(include)
     if not found:
         raise RuntimeError(f"no C++ headers found under {include}")

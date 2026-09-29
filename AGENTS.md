@@ -3,9 +3,10 @@
 Instructions for AI coding agents (GitHub Copilot, Claude, Codex, …) working in this repository.
 
 Your job is to **implement a UML design in C++**, in `project/impl/`: a class diagram and, when
-the person drew them, the state machines of its classes. A person drew the design; a verifier
-then compares your headers with it, element by element, and reports every difference. Success is
-**100 % alignment** on every report: the code is exactly the design, nothing more and nothing less.
+the person drew them, the state machines of its classes and the sequence diagrams of its
+scenarios. A person drew the design; a verifier then compares your implementation with it,
+element by element, and reports every difference. Success is **100 % alignment** on every
+report: the code is exactly the design, nothing more and nothing less.
 
 ## Where things are
 
@@ -13,10 +14,11 @@ then compares your headers with it, element by element, and reports every differ
 |---|---|---|
 | `project/diagrams/input/class.drawio` | the class diagram, drawn by a person | read — **never edit** |
 | `project/diagrams/input/state-<class>.drawio` | the state machine of one class, drawn by a person; there may be none, one or several | read — **never edit** |
-| `project/diagrams/output/class-design.mmd`, `state-<class>-design.mmd` | the same designs as mermaid text, generated | read — easiest to parse |
+| `project/diagrams/input/sequence-<scenario>.drawio` | one scenario as a sequence diagram, drawn by a person; none, one or several | read — **never edit** |
+| `project/diagrams/output/*-design.mmd` | the same designs as mermaid text, generated | read — easiest to parse |
 | `project/impl/` | the implementation | **write here, and only here** |
 | `project/process/` | specs and plans for your work (see below) | write |
-| `project/reports/class-report.md`, `state-<class>-report.md` | the verification reports, generated, one per design file | read |
+| `project/reports/*-report.md` | the verification reports, generated, one per design file | read |
 | `examples/` | worked examples | read |
 | `tools/` | the verifier | read |
 
@@ -32,6 +34,7 @@ project/impl/
   CMakeLists.txt
   include/<name>/<class>.hpp    one header per class; <name> is a short lowercase project name
   src/<class>.cpp               one source per class that has code; plus src/demo.cpp
+  scenarios/<scenario>.cpp      one program per sequence diagram (only if there are any)
 ```
 
 - **Headers in `include/` are what gets compared with the design.** Every class, attribute,
@@ -41,7 +44,8 @@ project/impl/
 - `CMakeLists.txt` follows [examples/1-class-simple/impl/CMakeLists.txt](examples/1-class-simple/impl/CMakeLists.txt):
   C++20, `CMAKE_EXPORT_COMPILE_COMMANDS ON`, a static library from `src/*.cpp` with `include`
   as its public include directory, `-Wall -Wextra`, and a small `demo` executable that uses the
-  classes. The build must succeed without warnings.
+  classes. Each sequence diagram adds `add_executable(scenario_<scenario> scenarios/<scenario>.cpp)`
+  linked to the library. The build must succeed without warnings.
 
 ## Rules for the implementation
 
@@ -99,6 +103,26 @@ the class box shows `- state: State`, `+ handle(event: Event): void` and the gua
 methods, nothing more. [examples/3-state-simple/impl/include/home/door.hpp](examples/3-state-simple/impl/include/home/door.hpp)
 is the pattern to copy; it is the same in every state machine.
 
+**5. Implement a sequence diagram as a scenario program, and make exactly the drawn calls.**
+A `sequence-<scenario>.drawio` is verified by *running* `impl/scenarios/<scenario>.cpp` in a
+traced build: every call between the project's classes is recorded, in order, and compared
+with the drawn messages. The *Sequence diagrams* section of the mapping document has the
+rules; in short:
+
+- `main()` creates the objects the scenario needs (that set-up is not in the diagram), then
+  calls `scenario()`. `scenario()` makes the actor's calls, and nothing else:
+  `void scenario(Library& library) { library.lend("b1", "m1"); }`.
+- A message `Library → Catalog : find(id)` is `Catalog::find` called from a method of
+  `Library`. Make every drawn call, in the drawn order, from the drawn class, and no other
+  calls between classes — a getter the diagram does not show is an extra message. A class
+  calling its own private helper is fine unless the diagram draws a self-message (then it must
+  happen). Return arrows are not compared; constructors are never messages.
+- The scenario must be deterministic: no clock, no randomness, no input, one thread.
+- Nothing to add to the code for tracing: the verifier instruments the build itself.
+
+[examples/5-sequence-simple/impl/scenarios/set_target.cpp](examples/5-sequence-simple/impl/scenarios/set_target.cpp)
+is the pattern to copy.
+
 ## Check your work
 
 Run the verifier after every change:
@@ -107,9 +131,9 @@ Run the verifier after every change:
 - **Terminal:** `.venv/bin/python tools/verify.py project` (the VS Code task *Set up Python
   environment* creates `.venv/` the first time).
 
-Then read every report in `project/reports/`: `class-report.md`, and one `state-<class>-report.md`
-per state machine. Fix every **Changed**, **Missing** and **Extra** entry and run it again until
-every alignment is 100 %. If a build error is reported, the compiler's
+Then read every report in `project/reports/`: `class-report.md`, one `state-<class>-report.md`
+per state machine and one `sequence-<scenario>-report.md` per scenario. Fix every **Changed**,
+**Missing** and **Extra** entry and run it again until every alignment is 100 %. If a build error is reported, the compiler's
 messages are printed above the summary. Do not edit the report or the files in
 `project/diagrams/output/`: they are regenerated on every run.
 
@@ -118,8 +142,8 @@ messages are printed above the summary. Do not edit the report or the files in
 Keep your working notes in `project/process/`:
 
 - `specs/` — what to build. Before writing code, write down each class from the design with its
-  members and relations, each state machine with its states, events and transitions, and the C++
-  construct each one maps to.
+  members and relations, each state machine with its states, events and transitions, each
+  scenario with its messages in order, and the C++ construct each one maps to.
 - `plans/` — how you will build it: a checklist of steps, one file per piece of work, named
   `YYYY-MM-DD-<topic>.md`.
 - `plans/completed/` — move a plan here once all its steps are done and the verifier reports
@@ -137,6 +161,11 @@ Keep your working notes in `project/process/`:
 - [examples/4-state-order](examples/4-state-order/) — two state machines with guards, actions and
   a self-transition, next to a class diagram. Its state machines contain **three deliberate
   mistakes** (listed in its README); its class diagram is exact.
+- [examples/5-sequence-simple](examples/5-sequence-simple/) — one scenario over three classes,
+  100 %. **Copy its scenario program for every sequence diagram.**
+- [examples/6-sequence-library](examples/6-sequence-library/) — two scenarios over five classes,
+  with a self-message and a return. Its scenarios contain **three deliberate mistakes** (listed
+  in its README); its class diagram is exact.
 
 ## If you change a draw.io file
 

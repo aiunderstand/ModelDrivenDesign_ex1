@@ -17,9 +17,9 @@ and register it in FLOWS below; see docs/README.md.
 """
 from pathlib import Path
 
-from . import class_diagram, state_diagram
+from . import class_diagram, sequence_diagram, state_diagram
 
-FLOWS = {flow.NAME: flow for flow in (class_diagram, state_diagram)}
+FLOWS = {flow.NAME: flow for flow in (class_diagram, state_diagram, sequence_diagram)}
 
 
 def flow_for(input_path):

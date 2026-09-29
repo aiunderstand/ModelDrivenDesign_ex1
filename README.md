@@ -16,9 +16,10 @@ run sets up `.venv/` with libclang, which takes a minute.
 ## How it works
 
 ```
-diagrams/input/class.drawio            ← a person draws the design: the class diagram
-diagrams/input/state-<class>.drawio    ← and, for a class that has one, its state machine
-impl/                                  ← an AI writes the C++
+diagrams/input/class.drawio              ← a person draws the design: the class diagram
+diagrams/input/state-<class>.drawio      ← for a class that has one, its state machine
+diagrams/input/sequence-<scenario>.drawio ← for a scenario worth showing, its sequence diagram
+impl/                                    ← an AI writes the C++
 
         Ctrl+Shift+B
 
@@ -27,8 +28,9 @@ diagrams/output/<design>-comparison.drawio    design and implementation side by 
                                               every difference coloured
 ```
 
-The implemented design is read from the code by libclang, not by an AI. The same design and
-the same code therefore always give the same report.
+The implemented design is read from the code by libclang, not by an AI; a sequence diagram is
+recorded by running its scenario. The same design and the same code therefore always give the
+same report.
 
 ## Examples
 
@@ -38,6 +40,8 @@ the same code therefore always give the same report.
 | [2-class-library](examples/2-class-library/) | 11 classes, with three deliberate mistakes to find | 90.7 % |
 | [3-state-simple](examples/3-state-simple/) | 1 class with a state machine, implemented exactly as designed | 100 % |
 | [4-state-order](examples/4-state-order/) | 2 state machines with guards, actions and a self-transition, three deliberate mistakes to find | 86.7 %, 81.2 % |
+| [5-sequence-simple](examples/5-sequence-simple/) | 1 scenario over 3 classes, implemented exactly as designed | 100 % |
+| [6-sequence-library](examples/6-sequence-library/) | 2 scenarios over 5 classes, three deliberate mistakes to find | 80.0 %, 77.8 % |
 
 ## Your own design
 
@@ -45,20 +49,23 @@ Your work goes in [`project/`](project/), which is always first in the menu:
 
 ```
 project/
-  diagrams/input/class.drawio            1. draw your class diagram here
-  diagrams/input/state-<class>.drawio       and, if a class has one, its state machine
-  impl/CMakeLists.txt                    2. the AI writes the implementation here
-  impl/include/…                            (the headers are what gets compared)
+  diagrams/input/class.drawio              1. draw your class diagram here
+  diagrams/input/state-<class>.drawio         if a class has one, its state machine
+  diagrams/input/sequence-<scenario>.drawio   for a scenario worth showing, its sequence diagram
+  impl/CMakeLists.txt                      2. the AI writes the implementation here
+  impl/include/…                              (the headers are what gets compared)
   impl/src/…
+  impl/scenarios/…                            (one program per sequence diagram, run and recorded)
 ```
 
 Run the task after each step. With no drawing yet, it tells you where to save one. With a drawing
 but no implementation, it converts each design to `diagrams/output/<design>-design.mmd`, the text
 version to hand to the AI. Once both exist, you get a report per design.
 
-In VS Code, create the file and it opens in the draw.io editor. The class and state shapes are
-under **More Shapes › UML**. The file's name says what kind of diagram it is: `class.drawio` is
-the class diagram, `state-order.drawio` the state machine of the class `Order`.
+In VS Code, create the file and it opens in the draw.io editor. The class, state and sequence
+shapes are under **More Shapes › UML**. The file's name says what kind of diagram it is:
+`class.drawio` is the class diagram, `state-order.drawio` the state machine of the class
+`Order`, `sequence-place_order.drawio` the scenario *place order*.
 
 ## In this repository
 
@@ -76,4 +83,5 @@ How the verification works, and how to add a diagram type:
 [tools/umlverify/docs/](tools/umlverify/docs/README.md). How UML maps to C++:
 [UML-CPP-MAPPING.md](tools/umlverify/docs/UML-CPP-MAPPING.md).
 
-**Not there yet:** a devcontainer, and diagram types other than class diagrams and state machines.
+**Not there yet:** a devcontainer, fragments (alt/loop/opt) in sequence diagrams, and diagram
+types other than class, state and sequence diagrams.
