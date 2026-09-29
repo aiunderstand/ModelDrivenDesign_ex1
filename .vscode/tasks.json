@@ -1,0 +1,31 @@
+{
+    // Ctrl+Shift+B (Cmd+Shift+B on macOS) runs "Verify design": it asks which
+    // project to verify (project/ or an example), empties its diagrams/output/,
+    // and regenerates it and reports/ from diagrams/input/*.drawio and impl/.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Verify design",
+            "detail": "Pick a project; regenerate its diagrams/output/ and reports/",
+            "type": "process",
+            "command": "${workspaceFolder}/.venv/bin/python",
+            "args": ["${workspaceFolder}/tools/verify.py"],
+            "dependsOn": "Set up Python environment",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": {
+                "base": "$gcc",
+                "fileLocation": ["autoDetect", "${workspaceFolder}"]
+            },
+            "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true }
+        },
+        {
+            "label": "Set up Python environment",
+            "detail": "Create .venv with the libclang bindings (does nothing if it already works)",
+            "type": "shell",
+            "command": ".venv/bin/python -c 'import clang.cindex' 2>/dev/null || { python3 -m venv .venv && .venv/bin/pip install --quiet -r requirements.txt; }",
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": [],
+            "presentation": { "reveal": "silent", "panel": "dedicated" }
+        }
+    ]
+}

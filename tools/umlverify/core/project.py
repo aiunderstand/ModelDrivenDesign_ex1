@@ -1,0 +1,78 @@
+"""A project folder, and what one verification flow reads and writes in it.
+
+    <folder>/diagrams/input/<type>.drawio            the design (input)
+    <folder>/impl/                                   the implementation (input)
+    <folder>/diagrams/output/<type>-<name>           generated diagrams
+    <folder>/reports/<type>-report.md                generated report
+"""
+import os
+import subprocess
+from pathlib import Path
+
+
+class FlowFailed(Exception):
+    """A flow could not produce a report. The message says why, in plain words."""
+
+    def __init__(self, message, detail=""):
+        super().__init__(message)
+        self.detail = detail
+
+
+class NotReady(FlowFailed):
+    """The project has not reached this step yet (e.g. no implementation). Not an error."""
+
+
+class Context:
+    def __init__(self, folder, diagram_type):
+        self.folder = Path(folder)
+        self.type = diagram_type
+        self.input = self.folder / "diagrams" / "input" / f"{diagram_type}.drawio"
+        self.output_dir = self.folder / "diagrams" / "output"
+        self.report = self.folder / "reports" / f"{diagram_type}-report.md"
+        self.impl = self.folder / "impl"
+        self.build = self.folder / "build"
+
+    def output(self, name):
+        """diagrams/output/<type>-<name>"""
+        return self.output_dir / f"{self.type}-{name}"
+
+    def show(self, path):
+        """A path as shown to people: relative to the project folder."""
+        return Path(path).relative_to(self.folder).as_posix()
+
+    def href(self, path):
+        """`path` relative to the report, for use as a link target."""
+        return Path(os.path.relpath(path, self.report.parent)).as_posix()
+
+    def link(self, path, label=None):
+        """A markdown link from the report to `path`."""
+        return f"[`{label or self.show(path)}`]({self.href(path)})"
+
+    def step(self, n, total, text):
+        print(f"\n  [{n}/{total}] {text}", flush=True)
+
+    def note(self, text):
+        print(f"        {text}", flush=True)
+
+    def write_failure(self, failure):
+        self.report.parent.mkdir(parents=True, exist_ok=True)
+        detail = f"```\n{failure.detail.strip()}\n```\n" if failure.detail else ""
+        self.report.write_text(f"# Verification report\n\n**Not produced:** {failure}\n\n{detail}")
+
+
+def build_cmake(ctx):
+    """Configure and build impl/ with CMake; the build gate every C++ flow shares.
+
+    Also writes build/compile_commands.json. Compiler errors are printed as-is so
+    VS Code's problem matcher can link them to the source.
+    """
+    for cmd in (["cmake", "-S", str(ctx.impl), "-B", str(ctx.build),
+                 "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"],
+                ["cmake", "--build", str(ctx.build)]):
+        try:
+            run = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise FlowFailed("CMake is not installed, so the implementation cannot be built")
+        if run.returncode != 0:
+            print(run.stdout + run.stderr, flush=True)
+            raise FlowFailed("the implementation does not build", run.stdout + run.stderr)
