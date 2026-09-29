@@ -16,36 +16,11 @@ would look exactly like an implementation mistake.
 """
 import re
 
-from ..core.drawio import Page, font, geometry, lines
+from ..core.drawio import Page, font, geometry, lines, routing_style, waypoints
 from .elements import relation_key
 from .mermaid import REVERSED, split_params
 
 MULTIPLICITY = re.compile(r"^(\d+|\*|n|\d+\s*\.\.\s*(\d+|\*|n))$")
-
-# Style keys that describe how a person routed a line; kept for the comparison.
-ROUTING = ("edgeStyle", "elbow", "curved", "rounded", "jettySize",
-           "exitX", "exitY", "exitDx", "exitDy", "exitPerimeter",
-           "entryX", "entryY", "entryDx", "entryDy", "entryPerimeter")
-_SWAP = {k: k.replace("exit", "entry") if k.startswith("exit") else k.replace("entry", "exit")
-         for k in ROUTING if k.startswith(("exit", "entry"))}
-
-
-def _routing(style, reverse):
-    """The routing part of an edge style; exit and entry swapped if the edge is reversed."""
-    kept = []
-    for part in (style or "").split(";"):
-        key, _, value = part.partition("=")
-        if key in ROUTING and value:
-            kept.append(f"{_SWAP.get(key, key) if reverse else key}={value}")
-    return "".join(f"{p};" for p in kept)
-
-
-def _points(cell, reverse):
-    g = cell.find("mxGeometry")
-    array = g.find("Array") if g is not None else None
-    pts = [(float(p.get("x", 0)), float(p.get("y", 0)))
-           for p in (array.findall("mxPoint") if array is not None else [])]
-    return pts[::-1] if reverse else pts
 
 
 def _mermaid_type(t):
@@ -178,6 +153,6 @@ def read(path):
         drawn_from = ends[second] if arrow in REVERSED else ends[first]
         reverse = drawn_from != src
         other = ends[first] if arrow in REVERSED else ends[second]
-        edges[relation_key(drawn_from, other, label)] = {"style": _routing(c.get("style"), reverse),
-                                                         "points": _points(c, reverse)}
+        edges[relation_key(drawn_from, other, label)] = {"style": routing_style(c.get("style"), reverse),
+                                                         "points": waypoints(c, reverse)}
     return types, relations, {"classes": layout, "edges": edges}, warnings

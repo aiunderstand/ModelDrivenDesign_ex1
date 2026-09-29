@@ -8,8 +8,9 @@
 
 The projects are project/ (your own work) and every folder under examples/. A project's
 designs are the files in diagrams/input/; each file's name picks the verification:
-class.drawio runs the class-diagram flow. A project without a design yet is listed,
-and choosing it tells you where to put one.
+class.drawio runs the class-diagram flow, state-<class>.drawio the state-machine flow
+for that class. A project without a design yet is listed, and choosing it tells you
+where to put one.
 
 Per project, diagrams/output/ and reports/*-report.md are emptied first, so nothing
 stale survives. In VS Code this runs as the default build task: Ctrl+Shift+B
@@ -117,7 +118,8 @@ def verify(folder):
         print(f"  No design yet. Draw your class diagram in draw.io and save it as\n"
               f"      {target}\n"
               f"  then run this again. In VS Code, create that file and it opens in the\n"
-              f"  draw.io editor; the class shapes are under More Shapes › UML.")
+              f"  draw.io editor; the class shapes are under More Shapes › UML.\n"
+              f"  A class's state machine goes next to it, as state-<class>.drawio.")
         return [("skipped", "-", None, f"no design yet — save it as {target}")]
 
     results = []
@@ -130,7 +132,7 @@ def verify(folder):
             results.append(("failed", design.name, None, msg))
             continue
         print(f"\n  {flow.TITLE}: {design.name}")
-        ctx = Context(folder, flow.NAME)
+        ctx = Context(folder, design.stem)
         try:
             result = flow.run(ctx)
         except NotReady as pending:

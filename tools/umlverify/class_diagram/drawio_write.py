@@ -16,7 +16,7 @@ class.drawio; classes the design lacks go in a column on the right, under the le
 import html
 
 from ..core.compare import nname
-from ..core.drawio import cell, legend, mxfile, paint
+from ..core.drawio import cell, legend, merge_styles, mxfile, paint, status_marks, style_value
 from ..core.routing import route, segment_clear
 from .elements import relation_key
 from .mermaid import REVERSED, parse, split_params
@@ -77,11 +77,6 @@ def _text_width(text, italic=False):
     return int(len(text) * (7.6 if italic else 7.0)) + 24
 
 
-def _style_value(style, key):
-    found = [v for k, _, v in (p.partition("=") for p in style.split(";")) if k == key]
-    return found[-1] if found else None
-
-
 def _side(box, point):
     """Which side of box (x, y, w, h) a point outside or on it is nearest to."""
     x, y, w, h = box
@@ -95,7 +90,7 @@ def _side(box, point):
 
 def _constraint_side(style, end):
     """The side an exitX/exitY (end='exit') or entryX/entryY constraint attaches to."""
-    x, y = _style_value(style, f"{end}X"), _style_value(style, f"{end}Y")
+    x, y = style_value(style, f"{end}X"), style_value(style, f"{end}Y")
     if x is None or y is None:
         return None
     x, y = float(x), float(y)
@@ -269,7 +264,7 @@ def build_cells(types, relations, layout, prefix="", mark=None):
                          + "".join(f'              <mxPoint x="{px}" y="{py}" />\n' for px, py in points)
                          + '            </Array>\n')
         geometry += '          </mxGeometry>\n'
-        cells.append(cell(eid, "", paint(_merge(EDGE_STYLE[r["arrow"]], EDGE_BASE, routing), status, "edge"),
+        cells.append(cell(eid, "", paint(merge_styles(EDGE_STYLE[r["arrow"]], EDGE_BASE, routing), status, "edge"),
                           f"{prefix}1", geometry,
                           kind="edge", extra=f' source="{ids[src]}" target="{ids[dst]}"', tooltip=tip))
         # UML puts the role name (the member's name) and the multiplicity at the
@@ -277,17 +272,6 @@ def build_cells(types, relations, layout, prefix="", mark=None):
         cells += _end_labels(f"{eid}t", eid, d_side, "target", r["label"], dcard)
         cells += _end_labels(f"{eid}s", eid, s_side, "source", None, scard)
     return cells
-
-
-def _merge(*styles):
-    """Join draw.io styles; a later value for the same key replaces an earlier one."""
-    parts = {}
-    for style in styles:
-        for part in style.split(";"):
-            key, sep, value = part.partition("=")
-            if key and sep:
-                parts[key] = value
-    return "".join(f"{k}={v};" for k, v in parts.items())
 
 
 def _drawn(layout, name, boxes):
@@ -322,7 +306,7 @@ def _rebase(style, old_src, new_src, old_dst, new_dst):
 def _attached(style, end, box):
     """The absolute point an exit/entry constraint attaches to."""
     x, y, w, h = box
-    fx, fy = float(_style_value(style, f"{end}X")), float(_style_value(style, f"{end}Y"))
+    fx, fy = float(style_value(style, f"{end}X")), float(style_value(style, f"{end}Y"))
     return (x + fx * w, y + fy * h)
 
 
@@ -356,28 +340,6 @@ def document(types, relations, layout, name="Class diagram"):
 
 # --------------------------------------------------------------------- comparison
 
-def _marks(result):
-    """{page: {(category, key): (status, tooltip)}}"""
-    marks = {"design": {}, "implemented": {}}
-    for d, i, diffs in result.changed:
-        tip = "CHANGED\n" + "\n".join(
-            f"{detail}: {dv} (design) → {iv} (implemented)".replace("`", "")
-            for detail, dv, iv in diffs)
-        marks["design"][(d.category, d.key)] = ("changed", tip)
-        marks["implemented"][(i.category, i.key)] = ("changed", tip)
-    for e in result.missing:
-        marks["design"][(e.category, e.key)] = (
-            "missing", "MISSING\nIn the design, but not in the implementation.")
-    for e in result.extra:
-        marks["implemented"][(e.category, e.key)] = (
-            "extra", "EXTRA\nIn the implementation, but not in the design.")
-    for e in result.not_counted:
-        marks["implemented"][(e.category, e.key)] = (
-            "uncounted", "NOT COUNTED\nThe design already implies this dependency "
-                         "through a method signature.")
-    return marks
-
-
 def _marker(table):
     """Translate build_cells' description of an element into elements.py's keys."""
     def mark(category, **info):
@@ -399,7 +361,8 @@ def _marker(table):
 
 def comparison(design_mmd, implemented_mmd, layout, result, design_label, implemented_label):
     """Both diagrams as a two-page .drawio document, colour-coded from `result`."""
-    marks = _marks(result)
+    marks = status_marks(result, "NOT COUNTED\nThe design already implies this dependency "
+                                 "through a method signature.")
     pages = [
         ("1 - Design (human)", design_mmd, "design", "DESIGN", design_label,
          [(None, "Identical"),

@@ -15,6 +15,7 @@ from ..core.report import ReportText, render
 from . import drawio_read, drawio_write, elements, mermaid
 
 NAME = "class"
+FILE = "class.drawio"
 TITLE = "Class diagram"
 
 TEXT = ReportText(

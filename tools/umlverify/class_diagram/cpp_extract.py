@@ -3,19 +3,11 @@
 Applies docs/UML-CPP-MAPPING.md mechanically: no AI, no heuristics beyond what
 that mapping specifies. extract(include_dir) returns the diagram as mermaid.
 """
-import pathlib
 import re
-from pathlib import Path
 
 import clang.cindex as ci
 
-# Match libclang to the SDK whose headers we parse. The pip wheel ships its own
-# LLVM, which chokes on Apple's libc++; the CommandLineTools dylib is the same
-# version as the SDK. On Linux/devcontainer the system libclang is already right.
-for _candidate in ("/Library/Developer/CommandLineTools/usr/lib/libclang.dylib",):
-    if pathlib.Path(_candidate).exists():
-        ci.Config.set_library_file(_candidate)
-        break
+from ..core.cpp import translation_unit
 
 # Namespaces declared in the project's own headers; their qualifiers are dropped
 # from type names (library::Member -> Member). Filled in by extract().
@@ -86,48 +78,13 @@ def classify(type_spelling, project_types):
     return ("attr", strip_ns(type_spelling))
 
 
-HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".hxx"}
-
-
 def extract(include_dir):
     """Every header under include_dir -> the implemented design, as mermaid."""
-    include = Path(include_dir)
     NAMESPACES.clear()
-    index = ci.Index.create()
-    headers = sorted(p for p in include.rglob("*") if p.suffix in HEADER_SUFFIXES)
-    if not headers:
-        raise RuntimeError(f"no C++ headers found under {include}")
-    unit = "\n".join(f'#include "{h.relative_to(include).as_posix()}"' for h in headers)
-    args = ["-std=c++20", f"-I{include}", "-xc++"]
-    # The pip libclang wheel is not the platform driver, so on macOS it needs the
-    # SDK spelled out. A C++ tool linking the system libclang inherits these.
-    import subprocess
-    try:
-        sdk = subprocess.run(["xcrun", "--show-sdk-path"], capture_output=True,
-                             text=True, check=True).stdout.strip()
-        args += [f"-isysroot{sdk}", f"-I{sdk}/usr/include/c++/v1", f"-I{sdk}/usr/include"]
-    except Exception:
-        pass
-    tu = index.parse("all.cpp", args=args, unsaved_files=[("all.cpp", unit)])
-    for d in tu.diagnostics:
-        if d.severity >= ci.Diagnostic.Error:
-            loc = d.location
-            where = f"{loc.file.name}:{loc.line}: " if loc.file else ""
-            raise RuntimeError(f"{where}{d.spelling}")
+    tu, ours = translation_unit(include_dir)
 
     # pass 1: what project types exist, and what shape are they
     decls = {}
-    root = include.resolve()
-
-    def ours(c):
-        """Only declarations written in this project's headers -- not libc++."""
-        f = c.location.file
-        if f is None:
-            return False
-        try:
-            return root in Path(f.name).resolve().parents
-        except OSError:
-            return False
 
     def collect(cur):
         for c in cur.get_children():

@@ -78,6 +78,65 @@ def font(style):
     return int(found[-1]) if found else 0
 
 
+def style_value(style, key):
+    """The value of one key in a draw.io style; the last occurrence wins."""
+    found = [v for k, _, v in (p.partition("=") for p in (style or "").split(";")) if k == key]
+    return found[-1] if found else None
+
+
+def merge_styles(*styles):
+    """Join draw.io styles; a later value for the same key replaces an earlier one."""
+    parts = {}
+    for style in styles:
+        for part in style.split(";"):
+            key, sep, value = part.partition("=")
+            if key and sep:
+                parts[key] = value
+    return "".join(f"{k}={v};" for k, v in parts.items())
+
+
+# Style keys that describe how a person routed a line; comparisons keep them.
+ROUTING = ("edgeStyle", "elbow", "curved", "rounded", "jettySize",
+           "exitX", "exitY", "exitDx", "exitDy", "exitPerimeter",
+           "entryX", "entryY", "entryDx", "entryDy", "entryPerimeter")
+_SWAP = {k: k.replace("exit", "entry") if k.startswith("exit") else k.replace("entry", "exit")
+         for k in ROUTING if k.startswith(("exit", "entry"))}
+
+
+def routing_style(style, reverse=False):
+    """The routing part of an edge style; exit and entry swapped if the edge is reversed."""
+    kept = []
+    for part in (style or "").split(";"):
+        key, _, value = part.partition("=")
+        if key in ROUTING and value:
+            kept.append(f"{_SWAP.get(key, key) if reverse else key}={value}")
+    return "".join(f"{p};" for p in kept)
+
+
+def waypoints(cell, reverse=False):
+    """An edge's waypoints, as (x, y) pairs; reversed if the edge is."""
+    g = cell.find("mxGeometry")
+    array = g.find("Array") if g is not None else None
+    pts = [(float(p.get("x", 0)), float(p.get("y", 0)))
+           for p in (array.findall("mxPoint") if array is not None else [])]
+    return pts[::-1] if reverse else pts
+
+
+def label_position(cell):
+    """Where a person put an edge's own label: (x, y, offset x, offset y), or None if untouched.
+
+    draw.io keeps it in the edge's geometry: x is the position along the line
+    (-1..1), y the distance beside it, and the offset point a further shift.
+    """
+    g = cell.find("mxGeometry")
+    if g is None or (g.get("x") is None and g.get("y") is None and g.find("mxPoint") is None):
+        return None
+    offset = next((p for p in g.findall("mxPoint") if p.get("as") == "offset"), None)
+    return (float(g.get("x", 0)), float(g.get("y", 0)),
+            float(offset.get("x", 0)) if offset is not None else 0.0,
+            float(offset.get("y", 0)) if offset is not None else 0.0)
+
+
 # ------------------------------------------------------------------------ writing
 
 def attr(html_text):
@@ -139,6 +198,26 @@ def legend(prefix, title, subtitle, rows, x, y=40, w=300):
             f'height="{row_h - 4}" as="geometry" />\n'
             f'        </mxCell>')
     return cells
+
+
+def status_marks(result, uncounted="NOT COUNTED\nThe design already implies this."):
+    """A comparison result -> {page: {(category, key): (status, tooltip)}}, for colouring."""
+    marks = {"design": {}, "implemented": {}}
+    for d, i, diffs in result.changed:
+        tip = "CHANGED\n" + "\n".join(
+            f"{detail}: {dv} (design) → {iv} (implemented)".replace("`", "")
+            for detail, dv, iv in diffs)
+        marks["design"][(d.category, d.key)] = ("changed", tip)
+        marks["implemented"][(i.category, i.key)] = ("changed", tip)
+    for e in result.missing:
+        marks["design"][(e.category, e.key)] = (
+            "missing", "MISSING\nIn the design, but not in the implementation.")
+    for e in result.extra:
+        marks["implemented"][(e.category, e.key)] = (
+            "extra", "EXTRA\nIn the implementation, but not in the design.")
+    for e in result.not_counted:
+        marks["implemented"][(e.category, e.key)] = ("uncounted", uncounted)
+    return marks
 
 
 def mxfile(pages):

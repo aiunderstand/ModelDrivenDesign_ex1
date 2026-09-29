@@ -2,25 +2,26 @@
 
 Instructions for AI coding agents (GitHub Copilot, Claude, Codex, …) working in this repository.
 
-Your job is to **implement a UML class diagram in C++**, in `project/impl/`. A person drew the
-design; a verifier then compares your headers with it, element by element, and reports every
-difference. Success is **100 % alignment**: the code is exactly the design, nothing more and
-nothing less.
+Your job is to **implement a UML design in C++**, in `project/impl/`: a class diagram and, when
+the person drew them, the state machines of its classes. A person drew the design; a verifier
+then compares your headers with it, element by element, and reports every difference. Success is
+**100 % alignment** on every report: the code is exactly the design, nothing more and nothing less.
 
 ## Where things are
 
 | Path | What it is | You may |
 |---|---|---|
-| `project/diagrams/input/class.drawio` | the design, drawn by a person | read — **never edit** |
-| `project/diagrams/output/class-design.mmd` | the same design as mermaid text, generated | read — easiest to parse |
+| `project/diagrams/input/class.drawio` | the class diagram, drawn by a person | read — **never edit** |
+| `project/diagrams/input/state-<class>.drawio` | the state machine of one class, drawn by a person; there may be none, one or several | read — **never edit** |
+| `project/diagrams/output/class-design.mmd`, `state-<class>-design.mmd` | the same designs as mermaid text, generated | read — easiest to parse |
 | `project/impl/` | the implementation | **write here, and only here** |
 | `project/process/` | specs and plans for your work (see below) | write |
-| `project/reports/class-report.md` | the verification report, generated | read |
+| `project/reports/class-report.md`, `state-<class>-report.md` | the verification reports, generated, one per design file | read |
 | `examples/` | worked examples | read |
 | `tools/` | the verifier | read |
 
-`class-design.mmd` is created by the verifier. If it is missing, run the verifier once (see
-[Check your work](#check-your-work)); it converts the drawing even before any code exists.
+The `.mmd` files are created by the verifier. If they are missing, run the verifier once (see
+[Check your work](#check-your-work)); it converts the drawings even before any code exists.
 
 ## Project structure
 
@@ -79,6 +80,25 @@ reach for `std::shared_ptr` unless the design shows a hollow diamond.
 - `string` → `std::string`, `size_t` → `std::size_t`, `vector<T>` → `std::vector<T>`.
 - Parameter and return types as drawn; `const T&` for class-typed parameters is fine.
 
+**4. Implement a state machine as a transition table.** A `state-<class>.drawio` is the state
+machine of that class (`state-order.drawio` → `Order`). The *State machines* section of the
+mapping document defines the pattern; in short, everything lives inside the class:
+
+| In the design | In C++ |
+|---|---|
+| the states | `enum class State { … }`, nested in the class |
+| the events | `enum class Event { … }`, nested in the class |
+| a guard `[hasKey]`, an action `/ log` | private member functions `bool hasKey() const`, `void log()` |
+| each arrow | one row of `static constexpr Transition transitions[]`: `{from, event, to, guard, action}`, `nullptr` for no guard or no action, **all five fields on every row** |
+| the arrow from the start symbol | the state attribute's default initializer: `State state_ = State::Closed;` |
+| firing an event | `void handle(Event)`, in `src/`, walks the table; an event with no row is ignored |
+
+The `Transition` struct and the table come after the guards and actions they name. `State`,
+`Event`, `Transition` and `transitions` belong to the state diagram, not to the class diagram:
+the class box shows `- state: State`, `+ handle(event: Event): void` and the guard and action
+methods, nothing more. [examples/3-state-simple/impl/include/home/door.hpp](examples/3-state-simple/impl/include/home/door.hpp)
+is the pattern to copy; it is the same in every state machine.
+
 ## Check your work
 
 Run the verifier after every change:
@@ -87,8 +107,9 @@ Run the verifier after every change:
 - **Terminal:** `.venv/bin/python tools/verify.py project` (the VS Code task *Set up Python
   environment* creates `.venv/` the first time).
 
-Then read `project/reports/class-report.md`. Fix every **Changed**, **Missing** and **Extra**
-entry and run it again until alignment is 100 %. If a build error is reported, the compiler's
+Then read every report in `project/reports/`: `class-report.md`, and one `state-<class>-report.md`
+per state machine. Fix every **Changed**, **Missing** and **Extra** entry and run it again until
+every alignment is 100 %. If a build error is reported, the compiler's
 messages are printed above the summary. Do not edit the report or the files in
 `project/diagrams/output/`: they are regenerated on every run.
 
@@ -97,7 +118,8 @@ messages are printed above the summary. Do not edit the report or the files in
 Keep your working notes in `project/process/`:
 
 - `specs/` — what to build. Before writing code, write down each class from the design with its
-  members and relations, and the C++ construct each one maps to.
+  members and relations, each state machine with its states, events and transitions, and the C++
+  construct each one maps to.
 - `plans/` — how you will build it: a checklist of steps, one file per piece of work, named
   `YYYY-MM-DD-<topic>.md`.
 - `plans/completed/` — move a plan here once all its steps are done and the verifier reports
@@ -110,6 +132,11 @@ Keep your working notes in `project/process/`:
 - [examples/2-class-library](examples/2-class-library/) — eleven classes covering interfaces,
   abstract classes, enums, templates and every kind of relation. Its implementation contains
   **three deliberate mistakes** (listed in its README): learn from the rest, never copy those.
+- [examples/3-state-simple](examples/3-state-simple/) — one class with a state machine, 100 %.
+  **Copy its table pattern for every state machine.**
+- [examples/4-state-order](examples/4-state-order/) — two state machines with guards, actions and
+  a self-transition, next to a class diagram. Its state machines contain **three deliberate
+  mistakes** (listed in its README); its class diagram is exact.
 
 ## If you change a draw.io file
 

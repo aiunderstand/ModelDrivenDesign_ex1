@@ -16,7 +16,8 @@ impl/ ──build──▶ extract ──────────▶ implemented
 1. **Read the design.** The draw.io file is turned into a model, which is also written out as
    mermaid (`diagrams/output/<type>-design.mmd`).
 2. **Build and extract the implementation.** The code must build; the implemented design is then
-   read from it mechanically (for class diagrams: from the C++ headers, by libclang).
+   read from it mechanically, by libclang: for class diagrams from the C++ headers, for state
+   machines from the class's transition table.
 3. **Compare.** Both models become *elements* — for a class diagram, one class, attribute, method
    or relation each — and every element of either diagram lands in exactly one bucket:
 
@@ -34,8 +35,10 @@ impl/ ──build──▶ extract ──────────▶ implemented
    draw.io comparison with every difference coloured, both from the same comparison result, so
    they cannot disagree.
 
-The **input file's name picks the diagram type**: `class.drawio` runs the class-diagram flow.
-All outputs carry the type as a prefix, so several diagram types can share one folder.
+The **input file's name picks the diagram type**: `class.drawio` runs the class-diagram flow,
+`state-<class>.drawio` (say `state-order.drawio`) the state-machine flow for that class. All
+outputs carry the file's name as a prefix, so several designs share one folder and one
+implementation, which is built once per run.
 
 ## Package layout
 
@@ -43,11 +46,13 @@ All outputs carry the type as a prefix, so several diagram types can share one f
 umlverify/
   __init__.py          FLOWS: input file name -> flow
   core/                diagram-agnostic
-    drawio.py            read pages and cells; write cells, legends, documents; status colours
+    drawio.py            read pages, cells and edge routing; write cells, legends, documents;
+                         status colours
     compare.py           Element, the four buckets, alignment
     report.py            the markdown report
     routing.py           orthogonal routing around boxes, for lines nobody drew
     project.py           Context (a project's paths), FlowFailed/NotReady, the CMake build gate
+    cpp.py               parsing a project's headers with libclang
   class_diagram/       the class-diagram flow: class.drawio + C++
     __init__.py          run(): read → build → extract → compare → report
     drawio_read.py       class.drawio -> model
@@ -55,9 +60,17 @@ umlverify/
     mermaid.py           the mermaid classDiagram subset, read and written
     cpp_extract.py       C++ headers -> model, via libclang
     elements.py          model -> elements; C++-aware type normalization
+  state_diagram/       the state-machine flow: state-<class>.drawio + C++
+    __init__.py          run(), the same four steps
+    drawio_read.py       state-<class>.drawio -> machine
+    drawio_write.py      machine -> draw.io shapes; the colour-coded comparison
+    mermaid.py           the mermaid stateDiagram-v2 subset, read and written
+    cpp_extract.py       the class's transition table -> machine, via libclang
+    elements.py          machine -> elements
   docs/
     README.md            this file
     CLASS-DIAGRAMS.md    how the class-diagram flow reads, extracts and compares
+    STATE-DIAGRAMS.md    the same for state machines
     UML-CPP-MAPPING.md   the rules that turn UML into C++ and back
 ```
 
@@ -85,14 +98,18 @@ A flow is a subpackage of `umlverify` with three names:
 | Name | What |
 |---|---|
 | `NAME` | the input file name it handles, without `.drawio` — e.g. `"sequence"` |
+| `FILE` | that name as shown to people — `"sequence.drawio"`, or `"state-<class>.drawio"` |
+| `SUBJECT` | optional: set it when the file name carries a subject after a dash, as `state-door.drawio` does; `ctx.subject` is then `"door"` |
 | `TITLE` | a human-readable name — e.g. `"Sequence diagram"` |
 | `run(ctx)` | reads `ctx.input`, writes `ctx.output("…")` and `ctx.report`, returns a `core.compare.Result`; raises `core.project.FlowFailed` with a plain-language reason when it cannot |
 
 Then add it to `FLOWS` in `__init__.py`. Everything shared is in `core/`: reading draw.io pages
-(`core.drawio.Page`), the comparison (`core.compare.compare` — you supply the elements and their
-categories), the report (`core.report.render` — you supply the wording in a `ReportText`), the
-colour palette and legend for the comparison drawing, and the CMake build gate. `class_diagram/`
-is the reference for how the pieces fit.
+and edge routing (`core.drawio`), parsing headers with libclang (`core.cpp`), the comparison
+(`core.compare.compare` — you supply the elements and their categories), the report
+(`core.report.render` — you supply the wording in a `ReportText`), the colour palette, status
+marks and legend for the comparison drawing, and the CMake build gate. `class_diagram/` is the
+reference for how the pieces fit; `state_diagram/` is a second, smaller instance of the same
+shape.
 
 ## Design decisions
 
@@ -102,6 +119,7 @@ is the reference for how the pieces fit.
 | Deterministic comparison, no weights | Same inputs, same report, nothing to argue with; a missing class outweighs a missing attribute only because its members go missing with it. |
 | The report never fails a build | It is for self-assessment and instructor visibility, not a grade gate. |
 | No layout engine | The comparison reuses the positions from the person's own draw.io file; the AI's additional classes go in a column on the right. |
+| A state machine is read from a table, never from `handle()`'s body | A method body can be written a hundred ways; a table has one shape, so libclang reads it back exactly. The table is the design, `handle()` only runs it. |
 | Unreadable parts of a design are warnings, never silent drops | A silently dropped element would look exactly like an implementation mistake. |
 
 ## Requirements and platform notes
@@ -116,9 +134,10 @@ system libclang matches. Windows is untested.
 
 ## The examples are the test suite
 
-`examples/1-class-simple` must score 100 %, and `examples/2-class-library` must give exactly the
-differences its README describes. After changing the library, run `tools/verify.py --all` and
-check `git diff examples/`: generated files should only change when you meant them to.
+`examples/1-class-simple` and `examples/3-state-simple` must score 100 %, and
+`examples/2-class-library` and `examples/4-state-order` must give exactly the differences their
+READMEs describe. After changing the library, run `tools/verify.py --all` and check
+`git diff examples/`: generated files should only change when you meant them to.
 
 Also look at what the library draws. `node tools/render-drawio/render.js <file.drawio>` renders
 every page to PNG with draw.io's own viewer (set up once with

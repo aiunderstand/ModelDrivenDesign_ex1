@@ -3,13 +3,14 @@
 This is the single most important document in the repository. Two consumers must agree with it
 exactly, or every report the tool produces is noise:
 
-1. the Copilot prompt that implements a design (planned: `.github/prompts/implement-design.prompt.md`)
-   — how the AI turns the design into C++
-2. [`class_diagram/cpp_extract.py`](../class_diagram/cpp_extract.py) — how libclang turns that C++ back into the
-   implemented design
+1. [`AGENTS.md`](../../../AGENTS.md), which tells the AI how to turn the design into C++
+2. the extractors, [`class_diagram/cpp_extract.py`](../class_diagram/cpp_extract.py) and
+   [`state_diagram/cpp_extract.py`](../state_diagram/cpp_extract.py) — how libclang turns that
+   C++ back into the implemented design
 
 If you change a rule here, change it in both, and re-run `tools/verify.py --all` to check the
-examples still give the results their READMEs describe.
+examples still give the results their READMEs describe. Class diagrams come first; state
+machines are at the [end](#state-machines).
 
 ## Scope rules
 
@@ -137,6 +138,84 @@ not `itemCount`.
 
 ## Worked reference
 
-`examples/2-class-library/` implements every rule on this page. When in doubt, read
+`examples/2-class-library/` implements every class-diagram rule on this page. When in doubt, read
 `examples/2-class-library/impl/include/library/` next to
-`examples/2-class-library/diagrams/output/class-design.mmd`.
+`examples/2-class-library/diagrams/output/class-design.mmd`. For state machines, read
+`examples/4-state-order/impl/include/shop/` next to its `diagrams/output/state-*-design.mmd`.
+
+## State machines
+
+A state machine drawn for a class — `diagrams/input/state-<class>.drawio`, the file named after
+the class in lower case, `state-library_item.drawio` for `LibraryItem` — is implemented
+**table-driven, inside that class**. The drawing is the table; `handle()` merely runs it.
+
+| UML | C++ |
+|---|---|
+| the states | `enum class State { … }` nested in the class, one enumerator per state, in drawing order |
+| the events on the transitions | `enum class Event { … }` nested in the class, one enumerator per event |
+| a guard, `[hasKey]` | a private `bool hasKey() const` member function |
+| an action, `/ log` | a private `void log()` member function |
+| the transitions | `static constexpr Transition transitions[]`: one row per arrow, `{from, event, to, guard, action}`, `nullptr` for no guard or no action |
+| the initial transition, `[*] --> Closed` | the state attribute's default member initializer, `State state_ = State::Closed;` |
+| firing an event | `void handle(Event)`: the row for the current state and event whose guard holds runs its action and enters its target; an event with no row is ignored |
+| a state with no outgoing arrows (or an arrow to the end symbol) | nothing extra: a terminal state is one that no row leaves |
+
+The row type is declared in the class, before the table:
+
+```cpp
+class Door
+{
+public:
+    enum class State { Closed, Open, Locked };
+    enum class Event { open, close, lock, unlock };
+
+    void handle(Event event);
+    State state() const;
+
+private:
+    bool hasKey() const;   // guard
+    void log();            // action
+
+    State state_ = State::Closed;   // the initial state
+
+    struct Transition
+    {
+        State from;
+        Event event;
+        State to;
+        bool (Door::*guard)() const;   // nullptr: no guard
+        void (Door::*action)();        // nullptr: no action
+    };
+    static constexpr Transition transitions[] = {
+        {State::Closed, Event::open,   State::Open,   nullptr,       nullptr},
+        {State::Closed, Event::lock,   State::Locked, &Door::hasKey, &Door::log},
+        …
+    };
+};
+```
+
+- Every row lists **all five fields**. A row may not leave trailing fields out: the build must
+  stay warning-free, and `-Wextra` warns about missing field initializers.
+- The table comes **after** the guards and actions it names: a static member's initializer can
+  only refer to members already declared.
+- One guard and one action per transition. `[a and b]` is one method that checks both;
+  `/ x, y` is one method that does both. No `[else]` and no `[!inStock]`: write a named guard,
+  `[outOfStock]`.
+- Composite states, entry/exit actions, history and choice pseudo-states are not part of the
+  mapping; the verifier warns when a drawing uses them.
+
+**In the class diagram**, `State`, `Event`, `Transition` and `transitions` belong to the state
+machine and are not class-diagram elements: nested types and static tables are not extracted.
+The class box shows the attribute `- state: State`, the method `+ handle(event: Event): void`,
+and the guard and action methods like any other methods.
+
+**What the extractor reads back**: the table's rows, with each field's role taken from its type
+(the two fields of one enum are `from` and `to`, in that order; the field of the other enum is the
+event; a member-function pointer returning `bool` is the guard and one returning `void` the
+action); the states from the State enum, in declaration order; the events the table uses (a
+declared but unused enumerator is a warning); the initial state from the initializer. A
+`std::array<Transition, N>` is read like a C array.
+
+**Names** compare as everywhere on this page: `In transit` ≡ `InTransit` ≡ `in_transit`, and a
+trailing underscore is ignored, so the guard `[signed]` may be `signed_()` because `signed` is a
+C++ keyword.

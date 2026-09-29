@@ -115,8 +115,8 @@ def render(result, text, sources, comparison, warnings=()):
 
     if warnings:
         out += [f"### ⚠️ Warnings ({len(warnings)})", "",
-                "Parts of the design that could not be read. They are not in any count above, "
-                "so check them by hand.", ""]
+                "Things that could not be read or counted, in the design or in the "
+                "implementation. They are not in any count above, so check them by hand.", ""]
         out += [f"- {w}" for w in warnings]
         out.append("")
 

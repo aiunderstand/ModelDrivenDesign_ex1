@@ -4,6 +4,9 @@
     <folder>/impl/                                   the implementation (input)
     <folder>/diagrams/output/<type>-<name>           generated diagrams
     <folder>/reports/<type>-report.md                generated report
+
+<type> is the design file's name: `class` for class.drawio, or flow name plus
+subject for files like state-door.drawio (flow `state`, subject `door`).
 """
 import os
 import subprocess
@@ -26,6 +29,7 @@ class Context:
     def __init__(self, folder, diagram_type):
         self.folder = Path(folder)
         self.type = diagram_type
+        self.flow, _, self.subject = diagram_type.partition("-")
         self.input = self.folder / "diagrams" / "input" / f"{diagram_type}.drawio"
         self.output_dir = self.folder / "diagrams" / "output"
         self.report = self.folder / "reports" / f"{diagram_type}-report.md"
@@ -60,12 +64,20 @@ class Context:
         self.report.write_text(f"# Verification report\n\n**Not produced:** {failure}\n\n{detail}")
 
 
+_BUILDS = {}   # build dir -> None (built) or the FlowFailed it raised; one build per run
+
+
 def build_cmake(ctx):
     """Configure and build impl/ with CMake; the build gate every C++ flow shares.
 
     Also writes build/compile_commands.json. Compiler errors are printed as-is so
-    VS Code's problem matcher can link them to the source.
+    VS Code's problem matcher can link them to the source. A project with several
+    designs is built once; later flows get the same outcome without a second build.
     """
+    if ctx.build in _BUILDS:
+        if _BUILDS[ctx.build] is not None:
+            raise _BUILDS[ctx.build]
+        return
     for cmd in (["cmake", "-S", str(ctx.impl), "-B", str(ctx.build),
                  "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"],
                 ["cmake", "--build", str(ctx.build)]):
@@ -75,4 +87,7 @@ def build_cmake(ctx):
             raise FlowFailed("CMake is not installed, so the implementation cannot be built")
         if run.returncode != 0:
             print(run.stdout + run.stderr, flush=True)
-            raise FlowFailed("the implementation does not build", run.stdout + run.stderr)
+            failure = FlowFailed("the implementation does not build", run.stdout + run.stderr)
+            _BUILDS[ctx.build] = failure
+            raise failure
+    _BUILDS[ctx.build] = None
