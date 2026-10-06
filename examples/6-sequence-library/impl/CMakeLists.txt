@@ -13,7 +13,11 @@ add_library(lending STATIC
     src/member.cpp
 )
 target_include_directories(lending PUBLIC include)
-target_compile_options(lending PRIVATE -Wall -Wextra)
+if(MSVC)
+    target_compile_options(lending PRIVATE /W4)
+else()
+    target_compile_options(lending PRIVATE -Wall -Wextra)
+endif()
 
 add_executable(demo src/demo.cpp)
 target_link_libraries(demo PRIVATE lending)

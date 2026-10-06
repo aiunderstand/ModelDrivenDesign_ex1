@@ -17,7 +17,11 @@ add_library(library STATIC
     src/search_query.cpp
 )
 target_include_directories(library PUBLIC include)
-target_compile_options(library PRIVATE -Wall -Wextra)
+if(MSVC)
+    target_compile_options(library PRIVATE /W4)
+else()
+    target_compile_options(library PRIVATE -Wall -Wextra)
+endif()
 
 add_executable(demo src/demo.cpp)
 target_link_libraries(demo PRIVATE library)

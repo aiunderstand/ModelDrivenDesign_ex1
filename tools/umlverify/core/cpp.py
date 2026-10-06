@@ -6,6 +6,7 @@ was declared in those headers rather than in the standard library.
 """
 import pathlib
 import subprocess
+import sys
 from pathlib import Path
 
 import clang.cindex as ci
@@ -70,6 +71,30 @@ def _resource_dir():
     return [f"-resource-dir={found}"] if (Path(found) / "include" / "stddef.h").exists() else []
 
 
+def _windows_args():
+    """On Windows the pip wheel finds no standard library at all. Point it at the MSVC and
+    Windows SDK headers: from %INCLUDE% (a Developer Command Prompt sets it), else by
+    looking for the newest Visual Studio and Windows 10/11 SDK installed."""
+    import os
+    dirs = [d for d in os.environ.get("INCLUDE", "").split(os.pathsep) if d]
+    if not dirs:
+        pf86 = os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")
+        try:
+            vs = subprocess.run(
+                [str(Path(pf86) / "Microsoft Visual Studio" / "Installer" / "vswhere.exe"),
+                 "-latest", "-products", "*", "-property", "installationPath"],
+                capture_output=True, text=True, check=True).stdout.strip()
+            tools = sorted((Path(vs) / "VC" / "Tools" / "MSVC").glob("*"))
+            if tools:
+                dirs.append(str(tools[-1] / "include"))
+        except Exception:
+            pass
+        sdks = sorted((Path(pf86) / "Windows Kits" / "10" / "Include").glob("10.*"))
+        if sdks:
+            dirs += [str(sdks[-1] / sub) for sub in ("ucrt", "um", "shared")]
+    return ["-fms-compatibility", "-fms-extensions"] + [f"-isystem{d}" for d in dirs]
+
+
 def _parse(include):
     found = headers(include)
     if not found:
@@ -84,6 +109,8 @@ def _parse(include):
         args += [f"-isysroot{sdk}", f"-I{sdk}/usr/include/c++/v1", f"-I{sdk}/usr/include"]
     except Exception:
         args += _resource_dir()
+        if sys.platform == "win32":
+            args += _windows_args()
     tu =ci.Index.create().parse("all.cpp", args=args, unsaved_files=[("all.cpp", unit)])
     for d in tu.diagnostics:
         if d.severity >= ci.Diagnostic.Error:

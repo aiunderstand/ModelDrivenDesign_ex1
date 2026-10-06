@@ -11,7 +11,11 @@ add_library(music STATIC
     src/song.cpp
 )
 target_include_directories(music PUBLIC include)
-target_compile_options(music PRIVATE -Wall -Wextra)
+if(MSVC)
+    target_compile_options(music PRIVATE /W4)
+else()
+    target_compile_options(music PRIVATE -Wall -Wextra)
+endif()
 
 add_executable(demo src/demo.cpp)
 target_link_libraries(demo PRIVATE music)

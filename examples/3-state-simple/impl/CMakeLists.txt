@@ -9,7 +9,11 @@ add_library(home STATIC
     src/door.cpp
 )
 target_include_directories(home PUBLIC include)
-target_compile_options(home PRIVATE -Wall -Wextra)
+if(MSVC)
+    target_compile_options(home PRIVATE /W4)
+else()
+    target_compile_options(home PRIVATE -Wall -Wextra)
+endif()
 
 add_executable(demo src/demo.cpp)
 target_link_libraries(demo PRIVATE home)

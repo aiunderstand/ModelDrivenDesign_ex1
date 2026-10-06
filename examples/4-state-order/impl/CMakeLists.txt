@@ -10,7 +10,11 @@ add_library(shop STATIC
     src/shipment.cpp
 )
 target_include_directories(shop PUBLIC include)
-target_compile_options(shop PRIVATE -Wall -Wextra)
+if(MSVC)
+    target_compile_options(shop PRIVATE /W4)
+else()
+    target_compile_options(shop PRIVATE -Wall -Wextra)
+endif()
 
 add_executable(demo src/demo.cpp)
 target_link_libraries(demo PRIVATE shop)
