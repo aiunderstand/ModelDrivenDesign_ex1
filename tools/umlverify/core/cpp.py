@@ -59,6 +59,17 @@ def project_classes(include_dir):
     return names
 
 
+def _resource_dir():
+    """Elsewhere (Linux, CI), the wheel ships without clang's own headers (stddef.h, ...),
+    so every standard header fails. Borrow them from an installed clang, if there is one."""
+    try:
+        found = subprocess.run(["clang", "-print-resource-dir"], capture_output=True,
+                               text=True, check=True).stdout.strip()
+    except Exception:
+        return []
+    return [f"-resource-dir={found}"] if (Path(found) / "include" / "stddef.h").exists() else []
+
+
 def _parse(include):
     found = headers(include)
     if not found:
@@ -72,8 +83,8 @@ def _parse(include):
                              text=True, check=True).stdout.strip()
         args += [f"-isysroot{sdk}", f"-I{sdk}/usr/include/c++/v1", f"-I{sdk}/usr/include"]
     except Exception:
-        pass
-    tu = ci.Index.create().parse("all.cpp", args=args, unsaved_files=[("all.cpp", unit)])
+        args += _resource_dir()
+    tu =ci.Index.create().parse("all.cpp", args=args, unsaved_files=[("all.cpp", unit)])
     for d in tu.diagnostics:
         if d.severity >= ci.Diagnostic.Error:
             loc = d.location

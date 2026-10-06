@@ -19,6 +19,17 @@
             "presentation": { "reveal": "always", "focus": true, "panel": "dedicated", "clear": true }
         },
         {
+            "label": "Preview the stories",
+            "detail": "Build the GitHub Pages site from the current reports into _site/ and serve it on http://localhost:8000",
+            "type": "shell",
+            "command": ".venv/bin/python tools/site/build_site.py && .venv/bin/python -m http.server -d _site 8000",
+            "options": { "cwd": "${workspaceFolder}" },
+            "dependsOn": "Set up Python environment",
+            "isBackground": true,
+            "problemMatcher": [],
+            "presentation": { "reveal": "always", "panel": "dedicated" }
+        },
+        {
             "label": "Set up Python environment",
             "detail": "Create .venv with the libclang bindings (does nothing if it already works)",
             "type": "shell",

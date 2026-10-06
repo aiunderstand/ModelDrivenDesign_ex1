@@ -43,6 +43,20 @@ same report.
 | [5-sequence-simple](examples/5-sequence-simple/) | 1 scenario over 3 classes, implemented exactly as designed | 100 % |
 | [6-sequence-library](examples/6-sequence-library/) | 2 scenarios over 5 classes, three deliberate mistakes to find | 80.0 %, 77.8 % |
 
+## The examples as stories
+
+Every push to `main` publishes the examples on GitHub Pages
+([.github/workflows/pages.yml](.github/workflows/pages.yml)): the workflow verifies every
+project from scratch, and [tools/site/build_site.py](tools/site/build_site.py) tells each one as
+an interactive story, picked from a dropdown — the drawings, the C++, the verdict, and the
+design and the code running side by side. Fire events at a state machine and watch the
+drawing and the transition table move together, or part ways where the code has a mistake;
+step through a scenario call by call.
+
+Nothing to write per example: a new folder under `examples/` (or your `project/`, once it has a
+drawing) becomes a story on the next push. To preview locally, run the VS Code task *Preview the
+stories*, or `.venv/bin/python tools/site/build_site.py && .venv/bin/python -m http.server -d _site`.
+
 ## Your own design
 
 Your work goes in [`project/`](project/), which is always first in the menu:
