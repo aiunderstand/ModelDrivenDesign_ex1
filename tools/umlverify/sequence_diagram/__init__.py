@@ -80,10 +80,12 @@ def run(ctx):
     try:
         from ..core.cpp import project_classes
         from . import trace_extract
-    except ImportError:
+    except ImportError as e:
         raise FlowFailed("the libclang Python bindings are not installed. In VS Code run the "
-                         "task 'Set up Python environment', or: python3 -m venv .venv && "
-                         ".venv/bin/pip install -r requirements.txt")
+                         "task 'Set up Python environment', or run these one per line: "
+                         "python -m venv .venv, then "
+                         ".venv/bin/pip install -r requirements.txt "
+                         "(Windows: .venv\\Scripts\\pip install -r requirements.txt)", f"{type(e).__name__}: {e}")
     try:
         classes = project_classes(include)
     except RuntimeError as e:

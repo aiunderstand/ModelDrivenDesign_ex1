@@ -61,10 +61,12 @@ def run(ctx):
     ctx.step(3, 4, f"Reading the implemented design from {ctx.show(include)}/")
     try:
         from . import cpp_extract
-    except ImportError:
+    except ImportError as e:
         raise FlowFailed("the libclang Python bindings are not installed. In VS Code run the "
-                         "task 'Set up Python environment', or: python3 -m venv .venv && "
-                         ".venv/bin/pip install -r requirements.txt")
+                         "task 'Set up Python environment', or run these one per line: "
+                         "python -m venv .venv, then "
+                         ".venv/bin/pip install -r requirements.txt "
+                         "(Windows: .venv\\Scripts\\pip install -r requirements.txt)", f"{type(e).__name__}: {e}")
     try:
         extracted = cpp_extract.extract(include)
     except RuntimeError as e:
