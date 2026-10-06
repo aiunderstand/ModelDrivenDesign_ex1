@@ -75,6 +75,10 @@ def build_cmake(ctx):
     VS Code's problem matcher can link them to the source. A project with several
     designs is built once; later flows get the same outcome without a second build.
     """
+    include = ctx.impl / "include"
+    if not any(include.rglob("*.h*")):
+        raise NotReady(f"no implementation yet — there are no C++ headers in "
+                       f"{ctx.show(include)}/; write one header per class there")
     if ctx.build in _BUILDS:
         if _BUILDS[ctx.build] is not None:
             raise _BUILDS[ctx.build]
