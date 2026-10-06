@@ -32,6 +32,10 @@ def _bootstrap():
     """Make `python tools/verify.py` work from any Python, on any OS, with no setup step:
     when the libclang bindings are missing, create .venv, install requirements.txt into it
     and re-run this script with the venv's Python."""
+    if not sys.flags.utf8_mode:
+        # Windows defaults to cp1252 for files; the reports and diagrams are UTF-8 (emoji,
+        # arrows). UTF-8 mode makes every read and write UTF-8, whatever the platform.
+        sys.exit(subprocess.call([sys.executable, "-X", "utf8", *sys.argv]))
     try:
         import clang.cindex  # noqa: F401
         return
@@ -47,7 +51,7 @@ def _bootstrap():
         subprocess.check_call([sys.executable, "-m", "venv", str(venv)])
     subprocess.check_call([str(py), "-m", "pip", "install", "--quiet",
                            "-r", str(repo / "requirements.txt")])
-    sys.exit(subprocess.call([str(py), *sys.argv],
+    sys.exit(subprocess.call([str(py), "-X", "utf8", *sys.argv],
                              env={**os.environ, "UMLVERIFY_BOOTSTRAPPED": "1"}))
 
 

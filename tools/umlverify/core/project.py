@@ -87,7 +87,7 @@ def build_cmake(ctx):
                  "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"],
                 ["cmake", "--build", str(ctx.build)]):
         try:
-            run = subprocess.run(cmd, capture_output=True, text=True)
+            run = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
         except FileNotFoundError:
             raise FlowFailed("CMake is not installed, so the implementation cannot be built")
         if run.returncode != 0:
@@ -137,7 +137,7 @@ def build_traced(ctx):
     )
     for cmd in steps:
         try:
-            run = subprocess.run(cmd, capture_output=True, text=True)
+            run = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
         except FileNotFoundError:
             raise FlowFailed(f"{cmd[0]} is not installed, so the implementation cannot be traced")
         if run.returncode != 0:
