@@ -23,32 +23,49 @@ def record(executable, trace_path, timeout=60):
                           timeout=timeout, cwd=str(Path(executable).parent))
 
 
-def symbols(executable):
-    """{address: demangled name} for every defined symbol of the executable."""
+def _scan(executable):
+    """[(address, demangled name)] for every defined symbol of the executable, in nm order."""
     for args in (["nm", "-n", "--demangle"], ["nm", "-n"]):
-        run = subprocess.run(args + [str(executable)], capture_output=True, text=True)
+        run = subprocess.run(args + [str(executable)], capture_output=True, text=True,
+                             errors="replace")
         if run.returncode == 0:
             break
     else:
         raise RuntimeError("nm could not read the executable's symbols: " + run.stderr.strip())
-    found = {}
+    found = []
     for line in run.stdout.splitlines():
         m = re.match(r"^([0-9a-fA-F]+)\s+(\S)\s+(.+)$", line)
         if m and m.group(2) not in "Uu":
-            found.setdefault(int(m.group(1), 16), m.group(3))
+            found.append((int(m.group(1), 16), m.group(3)))
     if "--demangle" not in args:                      # older nm: demangle in one go
-        names = list(found.values())
-        run = subprocess.run(["c++filt"], input="\n".join(names) + "\n", capture_output=True, text=True)
+        run = subprocess.run(["c++filt"], input="\n".join(n for _, n in found) + "\n",
+                             capture_output=True, text=True, errors="replace")
         if run.returncode == 0:
-            found = dict(zip(found.keys(), run.stdout.splitlines()))
+            found = [(a, n) for (a, _), n in zip(found, run.stdout.splitlines())]
     return found
+
+
+def symbols(executable):
+    """{address: demangled name} for every defined symbol of the executable. Several symbols
+    can share an address (Windows nm also lists section symbols such as ".text"): the first
+    real function name wins."""
+    return _table(_scan(executable))
+
+
+def _table(scanned):
+    table = {}
+    for address, name in scanned:
+        if address not in table or (table[address].startswith(".") and not name.startswith(".")):
+            table[address] = name
+    return table
 
 
 def events(executable, trace_path):
     """The recorded trace -> [(kind, address, name)], kind "E" (entry) or "X" (exit); name is
     None for an address the symbol table does not know."""
-    table = symbols(executable)
-    reference = next((a for a, n in table.items() if n.lstrip("_") == REFERENCE), None)
+    scanned = _scan(executable)
+    table = _table(scanned)
+    reference = next((a for a, n in scanned if n.lstrip("_") == REFERENCE), None)
     out, slide = [], None
     for line in Path(trace_path).read_text().splitlines():
         kind, _, addr = line.partition(" ")
