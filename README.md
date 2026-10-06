@@ -99,3 +99,6 @@ How the verification works, and how to add a diagram type:
 
 **Not there yet:** a devcontainer, fragments (alt/loop/opt) in sequence diagrams, and diagram
 types other than class, state and sequence diagrams.
+
+.\.venv\Scripts\python.exe -c "import clang.cindex as c; print(c.__file__); print(c.Index.create())"
+.\.venv\Scripts\python.exe tools\verify.py examples\1-class-simple
