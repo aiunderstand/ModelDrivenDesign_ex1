@@ -69,7 +69,8 @@ def run(ctx):
                          f"calls, and add it to CMakeLists.txt as "
                          f"add_executable(scenario_{scenario} scenarios/{scenario}.cpp)")
     build_traced(ctx)
-    executable = next(iter(sorted(ctx.trace_build.rglob(f"scenario_{scenario}"))), None)
+    executable = next((p for name in (f"scenario_{scenario}", f"scenario_{scenario}.exe")
+                       for p in sorted(ctx.trace_build.rglob(name)) if p.is_file()), None)
     if executable is None or not executable.is_file():
         raise FlowFailed(f"the build has no executable scenario_{scenario}; add "
                          f"add_executable(scenario_{scenario} scenarios/{scenario}.cpp) to "

@@ -12,6 +12,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from . import toolchain
+
 
 class FlowFailed(Exception):
     """A flow could not produce a report. The message says why, in plain words."""
@@ -83,7 +85,14 @@ def build_cmake(ctx):
         if _BUILDS[ctx.build] is not None:
             raise _BUILDS[ctx.build]
         return
+    try:
+        toolchain.ensure()
+    except RuntimeError as e:
+        failure = FlowFailed("the C++ toolchain is not available", str(e))
+        _BUILDS[ctx.build] = failure
+        raise failure
     for cmd in (["cmake", "-S", str(ctx.impl), "-B", str(ctx.build),
+                 *toolchain.cmake_generator(ctx.build),
                  "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"],
                 ["cmake", "--build", str(ctx.build)]):
         try:
@@ -126,11 +135,13 @@ def build_traced(ctx):
         if _TRACED[ctx.trace_build] is not None:
             raise _TRACED[ctx.trace_build]
         return
+    generator = toolchain.cmake_generator(ctx.trace_build)
     ctx.trace_build.mkdir(parents=True, exist_ok=True)
     runtime = ctx.trace_build / "uml_trace.o"
     steps = (
         [cxx_compiler(ctx.build), "-std=c++20", "-c", str(RUNTIME / "uml_trace.cpp"), "-o", str(runtime)],
         ["cmake", "-S", str(ctx.impl), "-B", str(ctx.trace_build),
+         *generator,
          f"-DCMAKE_PROJECT_INCLUDE={RUNTIME / 'instrument.cmake'}",
          f"-DUML_TRACE_RUNTIME={runtime}"],
         ["cmake", "--build", str(ctx.trace_build), "--clean-first"],

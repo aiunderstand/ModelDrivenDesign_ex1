@@ -13,6 +13,12 @@ implementation differs from the design: as a report, and as a colour-coded draw.
 You need Python 3, CMake and a C++20 compiler (on macOS, the Xcode Command Line Tools). The first
 run sets up `.venv/` with libclang, which takes a minute.
 
+**Windows:** only Python 3 is needed. The first run installs one fixed toolchain, MSYS2 (gcc,
+cmake, ninja), through `winget`, after asking you (about 1 GB, once). It is used instead of Visual
+Studio, so every PC behaves the same. Without `winget`, install MSYS2 from msys2.org and run
+`pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja`
+in the *MSYS2 UCRT64* shell.
+
 ## How it works
 
 ```
