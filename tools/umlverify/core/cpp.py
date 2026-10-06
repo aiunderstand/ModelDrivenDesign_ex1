@@ -92,7 +92,10 @@ def _windows_args():
         sdks = sorted((Path(pf86) / "Windows Kits" / "10" / "Include").glob("10.*"))
         if sdks:
             dirs += [str(sdks[-1] / sub) for sub in ("ucrt", "um", "shared")]
-    return ["-fms-compatibility", "-fms-extensions"] + [f"-isystem{d}" for d in dirs]
+    # The pip wheel is Clang 18; the newest MSVC STL insists on Clang 20 (error STL1000)
+    # unless told the mismatch is deliberate.
+    return (["-fms-compatibility", "-fms-extensions", "-D_ALLOW_COMPILER_AND_STL_VERSION_MISMATCH"]
+            + [f"-isystem{d}" for d in dirs])
 
 
 def _parse(include):
