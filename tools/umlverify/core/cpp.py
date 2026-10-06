@@ -4,6 +4,7 @@ translation_unit(include_dir) parses every header under include_dir as one unit 
 returns (tu, ours): the translation unit, and a predicate telling whether a cursor
 was declared in those headers rather than in the standard library.
 """
+import os
 import pathlib
 import subprocess
 import sys
@@ -14,8 +15,12 @@ import clang.cindex as ci
 # Match libclang to the SDK whose headers we parse. The pip wheel ships its own
 # LLVM, which chokes on Apple's libc++; the CommandLineTools dylib is the same
 # version as the SDK. On Linux/devcontainer the system libclang is already right.
-for _candidate in ("/Library/Developer/CommandLineTools/usr/lib/libclang.dylib",):
-    if pathlib.Path(_candidate).exists():
+# On Windows the newest MSVC STL needs Clang 20+, newer than the pip wheel: use an installed
+# LLVM (winget install LLVM.LLVM) when there is one. LIBCLANG_PATH overrides everything.
+for _candidate in (os.environ.get("LIBCLANG_PATH", ""),
+                   "/Library/Developer/CommandLineTools/usr/lib/libclang.dylib",
+                   r"C:\Program Files\LLVM\bin\libclang.dll"):
+    if _candidate and pathlib.Path(_candidate).is_file():
         ci.Config.set_library_file(_candidate)
         break
 
