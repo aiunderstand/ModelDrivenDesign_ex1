@@ -106,5 +106,10 @@ How the verification works, and how to add a diagram type:
 **Not there yet:** a devcontainer, fragments (alt/loop/opt) in sequence diagrams, and diagram
 types other than class, state and sequence diagrams.
 
-.\.venv\Scripts\python.exe -c "import clang.cindex as c; print(c.__file__); print(c.Index.create())"
-.\.venv\Scripts\python.exe tools\verify.py examples\1-class-simple
+# 1. What the program recorded (first lines)
+Get-Content examples\5-sequence-simple\build-trace\traces\set_target.txt -TotalCount 8
+
+# 2. What the executable's symbol table says
+$nm = "C:\msys64\ucrt64\bin\nm.exe"
+$exe = Get-ChildItem examples\5-sequence-simple\build-trace -Recurse -Filter scenario_set_target.exe | Select -First 1
+& $nm -n --demangle $exe.FullName | Select-String "uml_trace_reference|setTarget|Thermostat" | Select -First 8
