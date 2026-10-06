@@ -170,6 +170,8 @@ def verify(folder):
         except FlowFailed as failure:
             ctx.write_failure(failure)
             print(f"\n  ✗ {failure}")
+            if failure.detail:
+                print(f"    {failure.detail}")
             results.append(("failed", design.name, ctx.report, f"not produced: {failure}"))
             continue
         t = totals(result)
