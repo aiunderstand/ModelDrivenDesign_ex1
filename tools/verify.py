@@ -22,9 +22,36 @@ A project that is not that far yet — no design, or no implementation — is sk
 not a failure.
 """
 import argparse
+import os
+import subprocess
 import sys
 from pathlib import Path
 
+
+def _bootstrap():
+    """Make `python tools/verify.py` work from any Python, on any OS, with no setup step:
+    when the libclang bindings are missing, create .venv, install requirements.txt into it
+    and re-run this script with the venv's Python."""
+    try:
+        import clang.cindex  # noqa: F401
+        return
+    except ImportError:
+        pass
+    if os.environ.get("UMLVERIFY_BOOTSTRAPPED"):
+        return   # already re-run once: let the flow report the real import error
+    repo = Path(__file__).resolve().parent.parent
+    venv = repo / ".venv"
+    py = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    print("Setting up the Python environment (first run only) ...", flush=True)
+    if not py.exists():
+        subprocess.check_call([sys.executable, "-m", "venv", str(venv)])
+    subprocess.check_call([str(py), "-m", "pip", "install", "--quiet",
+                           "-r", str(repo / "requirements.txt")])
+    sys.exit(subprocess.call([str(py), *sys.argv],
+                             env={**os.environ, "UMLVERIFY_BOOTSTRAPPED": "1"}))
+
+
+_bootstrap()
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import umlverify  # noqa: E402
 from umlverify.core.compare import alignment, totals  # noqa: E402

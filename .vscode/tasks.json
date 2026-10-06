@@ -8,12 +8,11 @@
             "label": "Verify design",
             "detail": "Pick a project; regenerate its diagrams/output/ and reports/",
             "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/python",
+            "command": "python3",
             "windows": {
-                "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+                "command": "python"
             },
             "args": ["${workspaceFolder}/tools/verify.py"],
-            "dependsOn": "Set up Python environment",
             "group": { "kind": "build", "isDefault": true },
             "problemMatcher": {
                 "base": "$gcc",
